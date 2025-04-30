@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Healthcare Chatbot</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom scrollbar for chatbox */
+        #chatbox::-webkit-scrollbar {
+            width: 8px;
+        }
+        #chatbox::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        #chatbox::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+        #chatbox::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        /* Smooth fade-in for messages */
+        .message {
+            animation: fadeIn 0.3s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        /* Checkbox styling */
+        .checkbox-container {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+            padding: 8px;
+            border-radius: 4px;
+            background-color: #f8fafc;
+        }
+        .checkbox-container:hover {
+            background-color: #f1f5f9;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="max-w-2xl w-full bg-white rounded-lg shadow-lg p-6">
+        <h1 class="text-2xl font-bold text-gray-800 mb-4 text-center">Healthcare Chatbot</h1>
+        
+        <!-- Chatbox -->
+        <div id="chatbox" class="bg-gray-50 border border-gray-200 rounded-lg p-4 h-96 overflow-y-auto mb-4">
+            <!-- Messages will be appended here -->
+        </div>
+        
+        <!-- Input Area - Simplified to one input field -->
+        <div id="input-area" class="space-y-4">
+            {% csrf_token %}
+            <div id="main-input" class="flex flex-col">
+                <input type="text" id="user-input" placeholder="Enter your name" 
+                    class="border border-gray-300 rounded-lg p-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+            </div>
+            
+            <!-- Hidden elements for dynamic content -->
+            <div id="symptom-select-container" class="hidden">
+                <select id="symptom-select" class="w-full border border-gray-300 rounded-lg p-2 mb-2 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <!-- Options will be populated dynamically -->
+                </select>
+            </div>
+            
+            <div id="checkbox-container" class="hidden">
+                <!-- Checkboxes will be populated dynamically -->
+            </div>
+            
+            <div class="flex justify-between">
+                <button id="submit" onclick="submitInput()" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition">Submit</button>
+                <button id="restart" onclick="location.reload()" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition hidden">Start Over</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let step = 'name';
+        let selectedSymptom = '';
+        let additionalSymptoms = [];
+        let days = 0;
+        let symptomOptions = [];
+        let additionalSymptomOptions = [];
+
+        function getCsrfToken() {
+            return document.querySelector('[name=csrfmiddlewaretoken]').value;
+        }
+
+        function addMessage(text, type) {
+            const chatbox = document.getElementById('chatbox');
+            const msg = document.createElement('div');
+            msg.className = `message p-2 rounded-lg mb-2 ${type === 'user' ? 'bg-green-100 text-green-800 ml-auto max-w-xs' : 'bg-blue-100 text-blue-800 max-w-xs'}`;
+            msg.textContent = text;
+            chatbox.appendChild(msg);
+            chatbox.scrollTop = chatbox.scrollHeight;
+        }
+
+        function updateInputPlaceholder(text) {
+            document.getElementById('user-input').placeholder = text;
+        }
+
+        function showSelect(options, selectId) {
+            const selectContainer = document.getElementById('symptom-select-container');
+            const select = document.getElementById('symptom-select');
+            
+            select.innerHTML = '';
+            options.forEach(option => {
+                const opt = document.createElement('option');
+                opt.value = option;
+                opt.textContent = option;
+                select.appendChild(opt);
+            });
+            
+            document.getElementById('user-input').classList.add('hidden');
+            selectContainer.classList.remove('hidden');
+        }
+
+        function showCheckboxes(options) {
+            const checkboxContainer = document.getElementById('checkbox-container');
+            checkboxContainer.innerHTML = '';
+            
+            options.forEach(option => {
+                const div = document.createElement('div');
+                div.className = 'checkbox-container';
+                div.innerHTML = `
+                    <input type="checkbox" id="sym-${option}" name="symptoms" value="${option}" class="mr-2">
+                    <label for="sym-${option}">${option}</label>
+                `;
+                checkboxContainer.appendChild(div);
+            });
+            
+            document.getElementById('user-input').classList.add('hidden');
+            checkboxContainer.classList.remove('hidden');
+        }
+
+        function showTextInput() {
+            document.getElementById('symptom-select-container').classList.add('hidden');
+            document.getElementById('checkbox-container').classList.add('hidden');
+            document.getElementById('user-input').classList.remove('hidden');
+            document.getElementById('user-input').focus();
+        }
+
+        function submitInput() {
+            const userInput = document.getElementById('user-input');
+            
+            if (step === 'name') {
+                const name = userInput.value.trim();
+                if (!name) return alert('Please enter your name.');
+                addMessage(`You: ${name}`, 'user');
+                addMessage(`Hello, ${name}! Please enter a symptom you're experiencing.`, 'bot');
+                step = 'symptom';
+                updateInputPlaceholder("Enter a symptom (e.g., fever)");
+                userInput.value = '';
+            } 
+            else if (step === 'symptom') {
+                const symptom = userInput.value.trim();
+                if (!symptom) return alert('Please enter a symptom.');
+                addMessage(`You: ${symptom}`, 'user');
+                
+                fetch('/chatdoctor/process_symptom/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: `symptom=${encodeURIComponent(symptom)}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        addMessage(`Bot: ${data.error}`, 'bot');
+                    userInput.value = '';
+                    updateInputPlaceholder("Enter a symptom (e.g., fever)");
+                    step = 'symptom';
+                    showTextInput();
+                    userInput.focus();
+                    return;
+                    }
+                    
+                    if (data.matches.length === 1) {
+                        // If only one match, proceed automatically
+                        selectedSymptom = data.matches[0];
+                        addMessage(`Bot: You mentioned "${selectedSymptom}". For how many days have you had this symptom?`, 'bot');
+                        step = 'days';
+                        updateInputPlaceholder("Enter number of days (e.g., 3)");
+                        userInput.value = '';
+                        showTextInput();
+                    } else {
+                        // Multiple matches - show select
+                        symptomOptions = data.matches;
+                        addMessage('Bot: Please select the most accurate symptom from the list:', 'bot');
+                        showSelect(data.matches, 'symptom-select');
+                        step = 'select_symptom';
+                    }
+                })
+                .catch(error => {
+                    addMessage(`Bot: Error processing symptom: ${error}`, 'bot');
+                    userInput.value = '';
+                    updateInputPlaceholder("Enter a symptom (e.g., fever)");
+                    step = 'symptom';
+                    showTextInput();
+                });
+            } 
+            else if (step === 'select_symptom') {
+                selectedSymptom = document.getElementById('symptom-select').value;
+                addMessage(`You: ${selectedSymptom}`, 'user');
+                addMessage('Bot: For how many days have you had this symptom?', 'bot');
+                step = 'days';
+                updateInputPlaceholder("Enter number of days (e.g., 3)");
+                showTextInput();
+            } 
+            else if (step === 'days') {
+                days = parseInt(userInput.value);
+                if (!days || days <= 0) {
+                    alert('Please enter a valid number of days.');
+                    return;
+                }
+                
+                addMessage(`You: ${days} days`, 'user');
+                
+                fetch('/chatdoctor/get_additional_symptoms/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/x-www-form-urlencoded',
+                        'X-CSRFToken': getCsrfToken()
+                    },
+                    body: `selected_symptom=${encodeURIComponent(selectedSymptom)}`
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.additional_symptoms && data.additional_symptoms.length > 0) {
+                        additionalSymptomOptions = data.additional_symptoms;
+                        addMessage('Bot: Are you experiencing any of these additional symptoms? (Select all that apply)', 'bot');
+                        showCheckboxes(data.additional_symptoms);
+                        step = 'additional_symptoms';
+                    } else {
+                        submitDiagnosis();
+                    }
+                })
+                .catch(error => {
+                    addMessage(`Bot: Error fetching additional symptoms: ${error}`, 'bot');
+                    submitDiagnosis();
+                });
+            } 
+            else if (step === 'additional_symptoms') {
+                additionalSymptoms = Array.from(document.querySelectorAll('input[name="symptoms"]:checked')).map(cb => cb.value);
+                
+                if (additionalSymptoms.length > 0) {
+                    additionalSymptoms.forEach(sym => addMessage(`You: ${sym} (yes)`, 'user'));
+                } else {
+                    addMessage('You: No additional symptoms', 'user');
+                }
+                
+                submitDiagnosis();
+            }
+        }
+
+        function submitDiagnosis() {
+            const formData = new URLSearchParams();
+            formData.append('selected_symptom', selectedSymptom);
+            formData.append('days', days);
+            additionalSymptoms.forEach(sym => formData.append('additional_symptoms', sym));
+            
+            fetch('/chatdoctor/process_diagnosis/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'X-CSRFToken': getCsrfToken()
+                },
+                body: formData.toString()
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    addMessage(`Bot: ${data.error}`, 'bot');
+                } else {
+                    addMessage(`Bot: Symptoms reported: ${data.symptoms.join(', ')}`, 'bot');
+                    addMessage(`Bot: ${data.severity}`, 'bot');
+                    
+                    if (data.second_disease) {
+                        addMessage(`Bot: You may have ${data.disease} or ${data.second_disease}`, 'bot');
+                        addMessage(`Bot: ${data.disease}: ${data.description}`, 'bot');
+                        addMessage(`Bot: ${data.second_disease}: ${data.second_description}`, 'bot');
+                    } else {
+                        addMessage(`Bot: You may have ${data.disease}`, 'bot');
+                        addMessage(`Bot: ${data.description}`, 'bot');
+                    }
+                    
+                    addMessage('Bot: Recommended precautions:', 'bot');
+                    data.precautions.forEach((prec, i) => {
+                        if (prec) addMessage(`Bot: ${i+1}) ${prec}`, 'bot');
+                    });
+                    
+                    // Hide all inputs and show restart button
+                    document.getElementById('user-input').classList.add('hidden');
+                    document.getElementById('symptom-select-container').classList.add('hidden');
+                    document.getElementById('checkbox-container').classList.add('hidden');
+                    document.getElementById('submit').classList.add('hidden');
+                    document.getElementById('restart').classList.remove('hidden');
+                }
+            })
+            .catch(error => addMessage(`Bot: Error processing diagnosis: ${error}`, 'bot'));
+        }
+
+        // Handle pressing Enter key in the input field
+        document.getElementById('user-input').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitInput();
+            }
+        });
+    </script>
+</body>
+</html>
