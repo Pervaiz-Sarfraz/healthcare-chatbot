@@ -1,66 +1,44 @@
 import React, { useEffect, useState } from "react";
-import { BrowserRouter as Router, Route, Routes } from "react-router-dom";
-import ChatBot from "./Chatbot";
+import { BrowserRouter as Router, Route, Routes, Navigate } from "react-router-dom";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
+import Loader from "./comp/Loader";
+import ChatBot from "./Chatbot";
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [isRegistering, setIsRegistering] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const checkAuthStatus = () => {
-      const hasToken = !!localStorage.getItem("access");
-      setIsLoggedIn(hasToken);
+      const accessToken = localStorage.getItem("access");
+      setIsLoggedIn(!!accessToken);
       setIsLoading(false);
-
     };
 
-    const timer = setTimeout(checkAuthStatus, 1000);
-    
-    return () => clearTimeout(timer);
-  }, []); 
+    checkAuthStatus();
+  }, []);
 
   if (isLoading) {
-    return <h1>loading the chotbot</h1>;
+    return <Loader />;
   }
 
   return (
     <Router>
-      {!isLoggedIn ? (
-        <div className="main-container">
-          <div className="auth-container">
-            {isRegistering ? (
-              <>
-                <Register onRegister={() => setIsRegistering(false)} />
-                <p>
-                  Already have an account?{" "}
-                  <button onClick={() => setIsRegistering(false)}>Login</button>
-                </p>
-              </>
-            ) : (
-              <>
-                <Login onLogin={() => setIsLoggedIn(true)} />
-                <p>
-                  Don't have an account?{" "}
-                  <button onClick={() => setIsRegistering(true)}>Register</button>
-                </p>
-              </>
-            )}
-          </div>
-        </div>
-      ) : (
-        <>
-          <div className="main-content">
-          <Routes>
-            <Route path="/" element={<ChatBot />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/register" element={<Register />} />
-          </Routes>
-          </div>
-        </>
-      )}
+      <Routes>
+        <Route 
+          path="/login" 
+          element={!isLoggedIn ? <Login onLogin={() => setIsLoggedIn(true)} /> : <Navigate to="/" />} 
+        />
+        <Route 
+          path="/register" 
+          element={!isLoggedIn ? <Register onRegister={() => setIsLoggedIn(true)} /> : <Navigate to="/" />} 
+        />
+        <Route 
+          path="/" 
+          element={isLoggedIn ? <ChatBot /> : <Navigate to="/login" />} 
+        />
+      </Routes>
     </Router>
   );
 }

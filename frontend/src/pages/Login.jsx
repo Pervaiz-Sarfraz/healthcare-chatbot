@@ -21,11 +21,15 @@ function Login({ onLogin }) {
       localStorage.setItem("username", res.data.username);
       localStorage.setItem("email", res.data.email); 
       localStorage.setItem("user_id", res.data.id);
+      
       onLogin();
       navigate('/');
     } catch (err) {
       console.error(err);
-      setError(err.response?.data?.detail || err.response?.data?.error || "Login failed. Please check your credentials.");
+      const errorMessage = err.response?.data?.detail || 
+                         err.response?.data?.error || 
+                         "Login failed. Please check your credentials.";
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
@@ -39,15 +43,14 @@ function Login({ onLogin }) {
         </h2>
         <p className="mt-2 text-center text-sm text-gray-600">
           Or{' '}
-          <a 
+          <Link 
             to="/register" 
             className="font-medium text-indigo-600 hover:text-indigo-500"
           >
             create a new account
-          </a>
+          </Link>
         </p>
       </div>
-
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
         <div className="bg-white py-8 px-4 shadow sm:rounded-lg sm:px-10">
           <form className="space-y-6" onSubmit={handleLogin}>
